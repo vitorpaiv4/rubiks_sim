@@ -9,7 +9,8 @@ fn main() {
             primary_window: Some(Window {
                 title: "Rubik's Cube".into(),
                 resolution: (640.0_f32, 480.0_f32).into(),
-                decorations: false,
+                decorations: true,
+                resizable: true,
                 ..default()
             }),
             ..default()
@@ -34,6 +35,7 @@ struct CameraOrbit {
     yaw: f32,
     pitch: f32,
     auto_rotate: bool,
+    focus: Vec3,
 }
 
 impl Default for CameraOrbit {
@@ -43,6 +45,7 @@ impl Default for CameraOrbit {
             yaw: 0.0,
             pitch: 0.5586,
             auto_rotate: false,
+            focus: Vec3::ZERO,
         }
     }
 }
@@ -99,7 +102,7 @@ fn setup_cena(mut commands: Commands) {
     // Instruções Inferiores
     commands.spawn(TextBundle {
         text: Text::from_section(
-            "U D R L F B (Shift=inv) | S=scramble | X=reset | Mouse/Scroll=camera | Espaço=auto-rotate | Esc=sair",
+            "U D R L F B (Shift=inv) | S=scramble | X=reset | Mouse/Meio=orbit/pan | Scroll=zoom | Espaço=auto | Esc/Q=sair",
             TextStyle {
                 font_size: 10.5,
                 color: Color::rgba(0.6, 0.6, 0.6, 0.7),
@@ -167,11 +170,24 @@ fn girar_camera(
             orbit.auto_rotate = !orbit.auto_rotate;
         }
 
-        let is_dragging = mouse_buttons.pressed(MouseButton::Left) || mouse_buttons.pressed(MouseButton::Right);
-        if is_dragging {
+        let is_orbiting = mouse_buttons.pressed(MouseButton::Left) || mouse_buttons.pressed(MouseButton::Right);
+        let is_panning = mouse_buttons.pressed(MouseButton::Middle);
+
+        if is_orbiting || is_panning {
             for motion in motion_events.read() {
-                orbit.yaw -= motion.delta.x * 0.006;
-                orbit.pitch = (orbit.pitch + motion.delta.y * 0.006).clamp(-1.45, 1.45);
+                if is_orbiting {
+                    orbit.yaw -= motion.delta.x * 0.006;
+                    orbit.pitch = (orbit.pitch + motion.delta.y * 0.006).clamp(-1.45, 1.45);
+                } else if is_panning {
+                    let forward = -Vec3::new(
+                        orbit.pitch.cos() * orbit.yaw.sin(),
+                        orbit.pitch.sin(),
+                        orbit.pitch.cos() * orbit.yaw.cos(),
+                    ).normalize();
+                    let right = forward.cross(Vec3::Y).normalize();
+                    let up = right.cross(forward).normalize();
+                    orbit.focus += (-right * motion.delta.x + up * motion.delta.y) * 0.008;
+                }
             }
         } else {
             motion_events.clear();
@@ -189,7 +205,7 @@ fn girar_camera(
         let y = orbit.radius * orbit.pitch.sin();
         let z = orbit.radius * orbit.pitch.cos() * orbit.yaw.cos();
 
-        transform.translation = Vec3::new(x, y, z);
-        transform.look_at(Vec3::ZERO, Vec3::Y);
+        transform.translation = orbit.focus + Vec3::new(x, y, z);
+        transform.look_at(orbit.focus, Vec3::Y);
     }
 }
