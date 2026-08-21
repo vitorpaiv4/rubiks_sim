@@ -20,7 +20,7 @@ fn main() {
         }))
         .add_plugins((CubePlugin, RetroPlugin))
         .add_systems(Startup, setup_cena)
-        .add_systems(Update, (girar_camera, fechar_app))
+        .add_systems(Update, (girar_camera, fechar_app, atualizar_hud))
         .run();
 }
 
@@ -51,6 +51,9 @@ impl Default for CameraOrbit {
     }
 }
 
+#[derive(Component)]
+struct HudStatusText;
+
 fn setup_cena(mut commands: Commands) {
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
@@ -75,6 +78,29 @@ fn setup_cena(mut commands: Commands) {
         CameraOrbit::default(),
     ));
 
+    // Banner Superior: Timer, Movimentos e Status
+    commands.spawn((
+        TextBundle {
+            text: Text::from_section(
+                "TEMPO: 00:00.00 | MOVIMENTOS: 0 | STATUS: PRONTO",
+                TextStyle {
+                    font_size: 13.0,
+                    color: Color::rgb(0.9, 0.9, 0.2),
+                    ..default()
+                },
+            ),
+            style: Style {
+                position_type: PositionType::Absolute,
+                top: Val::Px(8.0),
+                left: Val::Px(8.0),
+                ..default()
+            },
+            ..default()
+        },
+        HudStatusText,
+    ));
+
+    // Instruções Inferiores
     commands.spawn(TextBundle {
         text: Text::from_section(
             "U D R L F B (Shift=inv) | S=scramble | X=reset | Mouse/Scroll=camera | Espaço=auto-rotate | Esc=sair",
@@ -92,6 +118,44 @@ fn setup_cena(mut commands: Commands) {
         },
         ..default()
     });
+}
+
+fn atualizar_hud(
+    timer_state: Res<cube::GameTimerState>,
+    queue: Res<cube::MoveQueue>,
+    mut query: Query<&mut Text, With<HudStatusText>>,
+) {
+    for mut text in &mut query {
+        let total_secs = timer_state.elapsed;
+        let mins = (total_secs / 60.0).floor() as u32;
+        let secs = (total_secs % 60.0).floor() as u32;
+        let millis = ((total_secs % 1.0) * 100.0).floor() as u32;
+
+        let status = if !queue.queue.is_empty() && queue.queue.iter().any(|m| m.is_scramble) {
+            "EMBARALHANDO..."
+        } else if timer_state.is_solved {
+            "RESOLVIDO! ★"
+        } else if timer_state.is_running {
+            "RESOLVENDO"
+        } else if timer_state.is_scrambled {
+            "EMBARALHADO (gire qualquer face)"
+        } else {
+            "PRONTO"
+        };
+
+        text.sections[0].value = format!(
+            "TEMPO: {:02}:{:02}.{:02} | MOVS: {} | {}",
+            mins, secs, millis, timer_state.move_count, status
+        );
+
+        text.sections[0].style.color = if timer_state.is_solved {
+            Color::rgb(0.2, 1.0, 0.4)
+        } else if timer_state.is_running {
+            Color::rgb(1.0, 0.85, 0.2)
+        } else {
+            Color::rgb(0.8, 0.8, 0.8)
+        };
+    }
 }
 
 fn girar_camera(
