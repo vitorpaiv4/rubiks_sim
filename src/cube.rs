@@ -16,9 +16,19 @@ impl Plugin for CubePlugin {
         app
             .init_resource::<RotationState>()
             .init_resource::<MoveQueue>()
+            .init_resource::<GameTimerState>()
             .add_systems(Startup, spawn_cube)
             .add_systems(Update, cube_system);
     }
+}
+
+#[derive(Resource, Default)]
+pub struct GameTimerState {
+    pub is_scrambled: bool,
+    pub is_running: bool,
+    pub elapsed: f32,
+    pub move_count: u32,
+    pub is_solved: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -228,8 +238,13 @@ fn cube_system(
     time: Res<Time>,
     mut queue: ResMut<MoveQueue>,
     mut state: ResMut<RotationState>,
+    mut timer_state: ResMut<GameTimerState>,
     mut cubies: Query<(Entity, &mut Transform, &mut Cubie)>,
 ) {
+    if timer_state.is_running {
+        timer_state.elapsed += time.delta_seconds();
+    }
+
     // Escuta comandos a qualquer momento e adiciona na fila
     if let Some(face) = check_face_keys(&keys) {
         let inverse = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
@@ -241,12 +256,23 @@ fn cube_system(
     }
 
     if keys.just_pressed(KeyCode::KeyS) {
+        queue.queue.clear();
+        timer_state.is_scrambled = true;
+        timer_state.is_running = false;
+        timer_state.is_solved = false;
+        timer_state.elapsed = 0.0;
+        timer_state.move_count = 0;
         queue_scramble(&mut queue);
     }
 
     if keys.just_pressed(KeyCode::KeyX) {
         queue.queue.clear();
         state.anim = None;
+        timer_state.is_scrambled = false;
+        timer_state.is_running = false;
+        timer_state.is_solved = false;
+        timer_state.elapsed = 0.0;
+        timer_state.move_count = 0;
         for (_, mut transform, mut cubie) in &mut cubies {
             cubie.logical_pos = cubie.initial_pos;
             transform.translation = cubie.initial_pos.as_vec3();
@@ -257,6 +283,14 @@ fn cube_system(
     // Se nenhuma animação está ativa, consome o próximo movimento da fila
     if state.anim.is_none() {
         if let Some(cmd) = queue.queue.pop_front() {
+            if !cmd.is_scramble {
+                if timer_state.is_scrambled && !timer_state.is_running && !timer_state.is_solved {
+                    timer_state.is_running = true;
+                }
+                if timer_state.is_running || timer_state.is_scrambled {
+                    timer_state.move_count += 1;
+                }
+            }
             start_rotation(&mut state, cmd, &cubies);
         }
     }
@@ -286,6 +320,17 @@ fn cube_system(
                 }
             }
             state.anim = None;
+
+            // Se terminou o movimento e o cubo está em jogo cronometrado, verifica se resolveu
+            if timer_state.is_running && queue.queue.is_empty() {
+                let solved = cubies.iter().all(|(_, transform, cubie)| {
+                    cubie.logical_pos == cubie.initial_pos && transform.rotation.dot(Quat::IDENTITY).abs() > 0.999
+                });
+                if solved {
+                    timer_state.is_running = false;
+                    timer_state.is_solved = true;
+                }
+            }
         }
     }
 }
