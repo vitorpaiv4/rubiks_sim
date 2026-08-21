@@ -1,14 +1,10 @@
 mod cube;
-mod retro;
 
 use bevy::prelude::*;
-use bevy::render::view::Msaa;
 use cube::CubePlugin;
-use retro::RetroPlugin;
 
 fn main() {
     App::new()
-        .insert_resource(Msaa::Off)
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Rubik's Cube".into(),
@@ -18,7 +14,7 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins((CubePlugin, RetroPlugin))
+        .add_plugins(CubePlugin)
         .add_systems(Startup, setup_cena)
         .add_systems(Update, (girar_camera, fechar_app, atualizar_hud))
         .run();
