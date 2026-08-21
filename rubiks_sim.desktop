@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Rubik's Cube 3D
+Comment=Simulador de Cubo Mágico 3D em Rust
+Exec=rubiks_sim
+Icon=rubiks_sim
+Terminal=false
+Type=Application
+Categories=Game;LogicGame;
