@@ -1,10 +1,10 @@
-# 🧊 Rubik's Cube 3D (Simulador Retrô)
+#  Rubik's Cube 3D (Simulador Retrô)
 
 Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy](https://bevyengine.org)** (v0.13), com estética retrô CRT/PS1, animações suaves e controles precisos.
 
 ---
 
-## 🎮 Controles
+##  Controles
 
 ### Rotação das Faces (Notação Oficial WCA)
 * `U`: Face Superior (Up - horário)
@@ -29,7 +29,7 @@ Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy]
 
 ---
 
-## ⏱️ HUD e Detecção de Vitória (Speedcubing)
+##  HUD e Detecção de Vitória (Speedcubing)
 
 * **Fila de Movimentos Assíncrona**: Permite digitar algoritmos rápidos (ex: *sexy move* `R U R' U'`) sem perda de inputs.
 * **Timer Integrado**: Inicia automaticamente no primeiro movimento após o embaralhamento (`S`).
@@ -38,7 +38,7 @@ Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy]
 
 ---
 
-## 🛠️ Arquitetura
+##  Arquitetura
 
 O projeto é estruturado em plugins modulares do Bevy ECS:
 
@@ -51,7 +51,7 @@ O projeto é estruturado em plugins modulares do Bevy ECS:
 
 ---
 
-## 🚀 Como Executar
+## Como Executar
 
 Certifique-se de ter o [Rust e Cargo](https://rustup.rs/) instalados:
 
