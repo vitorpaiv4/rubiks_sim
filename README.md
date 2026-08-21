@@ -1,10 +1,24 @@
-#  Rubik's Cube 3D (Simulador Retrô)
+# Rubik's Cube 3D (Simulador)
 
-Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy](https://bevyengine.org)** (v0.13), com estética retrô CRT/PS1, animações suaves e controles precisos.
+Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy](https://bevyengine.org)** (v0.13), com cores sólidas e vívidas (unlit), animações suaves e controles precisos.
 
 ---
 
-##  Controles
+## Download (Executáveis Prontos)
+
+Não é necessário instalar Rust ou compilar código. Basta baixar o executável pronto para o seu sistema:
+
+| Sistema Operacional | Download Direto | Como Rodar |
+| :--- | :--- | :--- |
+| **Windows** | [Baixar .exe](https://github.com/vitorpaiv4/rubiks_sim/releases/latest/download/rubiks_sim-windows-x86_64.exe) · [(.zip)](https://github.com/vitorpaiv4/rubiks_sim/releases/latest/download/rubiks_sim-windows-x86_64.zip) | Baixe e dê 2 cliques no `.exe` |
+| **Linux** | [Baixar .AppImage](https://github.com/vitorpaiv4/rubiks_sim/releases/latest/download/rubiks_sim-linux-x86_64.AppImage) · [(.tar.gz)](https://github.com/vitorpaiv4/rubiks_sim/releases/latest/download/rubiks_sim-linux-x86_64.tar.gz) | Conceda permissão de execução (`chmod +x`) e dê 2 cliques |
+| **macOS** | [Apple Silicon (M1/M2/M3)](https://github.com/vitorpaiv4/rubiks_sim/releases/latest/download/rubiks_sim-macos-apple-silicon.zip) · [Intel](https://github.com/vitorpaiv4/rubiks_sim/releases/latest/download/rubiks_sim-macos-intel.zip) | Descompacte e execute o binário |
+
+> Todas as versões e notas de atualização estão disponíveis na [Página de Releases](https://github.com/vitorpaiv4/rubiks_sim/releases).
+
+---
+
+## Controles
 
 ### Rotação das Faces (Notação Oficial WCA)
 * `U`: Face Superior (Up - horário)
@@ -29,7 +43,7 @@ Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy]
 
 ---
 
-##  HUD e Detecção de Vitória (Speedcubing)
+## HUD e Detecção de Vitória (Speedcubing)
 
 * **Fila de Movimentos Assíncrona**: Permite digitar algoritmos rápidos (ex: *sexy move* `R U R' U'`) sem perda de inputs.
 * **Timer Integrado**: Inicia automaticamente no primeiro movimento após o embaralhamento (`S`).
@@ -38,7 +52,7 @@ Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy]
 
 ---
 
-##  Arquitetura
+## Arquitetura
 
 O projeto é estruturado em plugins modulares do Bevy ECS:
 
@@ -51,10 +65,14 @@ O projeto é estruturado em plugins modulares do Bevy ECS:
 
 ---
 
-## Como Executar
+## Compilar a partir do Código-Fonte (Desenvolvedores)
 
-Certifique-se de ter o [Rust e Cargo](https://rustup.rs/) instalados:
+Caso queira modificar ou compilar localmente com o [Rust e Cargo](https://rustup.rs/):
 
 ```bash
+# Executar em modo desenvolvimento
+cargo run
+
+# Executar em modo otimizado (release)
 cargo run --release
 ```
