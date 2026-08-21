@@ -20,8 +20,14 @@ fn main() {
         }))
         .add_plugins((CubePlugin, RetroPlugin))
         .add_systems(Startup, setup_cena)
-        .add_systems(Update, girar_camera)
+        .add_systems(Update, (girar_camera, fechar_app))
         .run();
+}
+
+fn fechar_app(keys: Res<ButtonInput<KeyCode>>, mut exit: EventWriter<bevy::app::AppExit>) {
+    if keys.just_pressed(KeyCode::Escape) || keys.just_pressed(KeyCode::KeyQ) {
+        exit.send(bevy::app::AppExit);
+    }
 }
 
 #[derive(Component)]
@@ -53,7 +59,7 @@ fn setup_cena(mut commands: Commands) {
 
     commands.spawn(TextBundle {
         text: Text::from_section(
-            "U D R L F B  |  Shift+inverso  |  S=scramble  |  X=reset",
+            "U D R L F B  |  Shift+inverso  |  S=scramble  |  X=reset  |  Esc=sair",
             TextStyle {
                 font_size: 11.0,
                 color: Color::rgba(0.6, 0.6, 0.6, 0.6),
