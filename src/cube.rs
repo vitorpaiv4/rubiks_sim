@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 use rand::Rng;
+use std::collections::VecDeque;
 
 const CUBIE_SIZE: f32 = 0.9;
 const ADESIVO_ESPESSURA: f32 = 0.02;
 const ADESIVO_TAMANHO: f32 = 0.8;
 const ADESIVO_OFFSET: f32 = 0.46;
-const ANIM_DURATION: f32 = 0.15;
+const ANIM_DURATION_USER: f32 = 0.14;
+const ANIM_DURATION_SCRAMBLE: f32 = 0.055;
 
 pub struct CubePlugin;
 
@@ -13,15 +15,28 @@ impl Plugin for CubePlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<RotationState>()
+            .init_resource::<MoveQueue>()
             .add_systems(Startup, spawn_cube)
             .add_systems(Update, cube_system);
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MoveCommand {
+    pub face: Face,
+    pub inverse: bool,
+    pub is_scramble: bool,
+}
+
+#[derive(Resource, Default)]
+pub struct MoveQueue {
+    pub queue: VecDeque<MoveCommand>,
+}
+
 #[derive(Component)]
 pub struct Cubie {
-    logical_pos: IVec3,
-    initial_pos: IVec3,
+    pub logical_pos: IVec3,
+    pub initial_pos: IVec3,
 }
 
 #[derive(Component)]
@@ -52,12 +67,12 @@ struct CubeMaterials {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum Face {
+pub enum Face {
     U, D, R, L, F, B,
 }
 
 impl Face {
-    fn axis(&self) -> Vec3 {
+    pub fn axis(&self) -> Vec3 {
         match self {
             Face::U | Face::D => Vec3::Y,
             Face::R | Face::L => Vec3::X,
@@ -65,7 +80,7 @@ impl Face {
         }
     }
 
-    fn layer(&self) -> i32 {
+    pub fn layer(&self) -> i32 {
         match self {
             Face::U => 1, Face::D => -1,
             Face::R => 1, Face::L => -1,
@@ -73,7 +88,7 @@ impl Face {
         }
     }
 
-    fn target_angle(&self, inverse: bool) -> f32 {
+    pub fn target_angle(&self, inverse: bool) -> f32 {
         let ang = std::f32::consts::FRAC_PI_2;
         match (self, inverse) {
             (Face::U, false) => -ang,  (Face::U, true) => ang,
@@ -87,18 +102,19 @@ impl Face {
 }
 
 #[derive(Resource, Default)]
-struct RotationState {
+pub struct RotationState {
     anim: Option<RotationAnim>,
 }
 
-struct RotationAnim {
+pub struct RotationAnim {
     axis: Vec3,
     target_angle: f32,
     elapsed: f32,
+    duration: f32,
     entries: Vec<AnimEntry>,
 }
 
-struct AnimEntry {
+pub struct AnimEntry {
     entity: Entity,
     start_pos: Vec3,
     start_rot: Quat,
@@ -210,31 +226,45 @@ fn sticker_material(assets: &CubeMaterials, face: &str) -> Handle<StandardMateri
 fn cube_system(
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
+    mut queue: ResMut<MoveQueue>,
     mut state: ResMut<RotationState>,
     mut cubies: Query<(Entity, &mut Transform, &mut Cubie)>,
 ) {
-    if state.anim.is_none() {
-        if let Some(face) = check_face_keys(&keys) {
-            let inverse = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
-            start_rotation(&mut state, face, inverse, &mut cubies);
-        }
+    // Escuta comandos a qualquer momento e adiciona na fila
+    if let Some(face) = check_face_keys(&keys) {
+        let inverse = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        queue.queue.push_back(MoveCommand {
+            face,
+            inverse,
+            is_scramble: false,
+        });
+    }
 
-        if keys.just_pressed(KeyCode::KeyS) {
-            scramble(&mut state, &mut cubies);
-        }
+    if keys.just_pressed(KeyCode::KeyS) {
+        queue_scramble(&mut queue);
+    }
 
-        if keys.just_pressed(KeyCode::KeyX) {
-            for (_, mut transform, mut cubie) in &mut cubies {
-                cubie.logical_pos = cubie.initial_pos;
-                transform.translation = cubie.initial_pos.as_vec3();
-                transform.rotation = Quat::IDENTITY;
-            }
+    if keys.just_pressed(KeyCode::KeyX) {
+        queue.queue.clear();
+        state.anim = None;
+        for (_, mut transform, mut cubie) in &mut cubies {
+            cubie.logical_pos = cubie.initial_pos;
+            transform.translation = cubie.initial_pos.as_vec3();
+            transform.rotation = Quat::IDENTITY;
         }
     }
 
+    // Se nenhuma animação está ativa, consome o próximo movimento da fila
+    if state.anim.is_none() {
+        if let Some(cmd) = queue.queue.pop_front() {
+            start_rotation(&mut state, cmd, &cubies);
+        }
+    }
+
+    // Processa a animação ativa
     if let Some(ref mut anim) = state.anim {
         anim.elapsed += time.delta_seconds();
-        let t = (anim.elapsed / ANIM_DURATION).min(1.0);
+        let t = (anim.elapsed / anim.duration).min(1.0);
         let eased = smoothstep(t);
 
         for entry in &anim.entries {
@@ -272,13 +302,13 @@ fn check_face_keys(keys: &Res<ButtonInput<KeyCode>>) -> Option<Face> {
 
 fn start_rotation(
     state: &mut RotationState,
-    face: Face,
-    inverse: bool,
-    cubies: &mut Query<(Entity, &mut Transform, &mut Cubie)>,
+    cmd: MoveCommand,
+    cubies: &Query<(Entity, &mut Transform, &mut Cubie)>,
 ) {
-    let axis = face.axis();
-    let layer = face.layer();
-    let target_angle = face.target_angle(inverse);
+    let axis = cmd.face.axis();
+    let layer = cmd.face.layer();
+    let target_angle = cmd.face.target_angle(cmd.inverse);
+    let duration = if cmd.is_scramble { ANIM_DURATION_SCRAMBLE } else { ANIM_DURATION_USER };
 
     let entries: Vec<AnimEntry> = cubies.iter()
         .filter(|(_, _, cubie)| {
@@ -303,14 +333,12 @@ fn start_rotation(
         axis,
         target_angle,
         elapsed: 0.0,
+        duration,
         entries,
     });
 }
 
-fn scramble(
-    state: &mut RotationState,
-    cubies: &mut Query<(Entity, &mut Transform, &mut Cubie)>,
-) {
+fn queue_scramble(queue: &mut MoveQueue) {
     let faces = [Face::U, Face::D, Face::R, Face::L, Face::F, Face::B];
     let mut rng = rand::thread_rng();
     let mut last_face: Option<Face> = None;
@@ -323,21 +351,11 @@ fn scramble(
             }
         };
         let inverse = rng.gen_bool(0.5);
-        start_rotation(state, face, inverse, cubies);
-
-        if let Some(ref mut anim) = state.anim {
-            anim.elapsed = ANIM_DURATION;
-            for entry in &anim.entries {
-                if let Ok((_, mut transform, mut cubie)) = cubies.get_mut(entry.entity) {
-                    let new_pos = rotate_logical(entry.logical_pos, anim.axis, anim.target_angle);
-                    cubie.logical_pos = new_pos;
-                    transform.translation = new_pos.as_vec3();
-                    transform.rotation = Quat::from_axis_angle(anim.axis, anim.target_angle) * entry.start_rot;
-                }
-            }
-            state.anim = None;
-        }
-
+        queue.queue.push_back(MoveCommand {
+            face,
+            inverse,
+            is_scramble: true,
+        });
         last_face = Some(face);
     }
 }
