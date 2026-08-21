@@ -17,13 +17,15 @@ Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy]
 
 ### Câmera e Visualização
 * **Clique & Arraste (Botão Esquerdo ou Direito do Mouse)**: Orbitar a câmera livremente ao redor do cubo.
+* **Botão do Meio do Mouse (Scroll Click & Arraste)**: Mover/Pan a posição do cubo na tela.
 * **Scroll do Mouse**: Zoom in / Zoom out.
 * `Espaço`: Alternar auto-rotação da câmera.
 
-### Ações de Jogo & HUD
+### Ações de Jogo & Janela
 * `S`: **Embaralhar (Scramble)** com animação fluida (sequência aleatória de 20 movimentos sem repetições conflitantes).
 * `X`: **Reset** instantâneo do cubo para a posição original resolvida.
-* `Esc` ou `Q`: Fechar a aplicação.
+* `Esc`, `Q` ou botão `[X]` da janela: Fechar a aplicação.
+* **Barra de Título da Janela**: Mover a janela livremente pela tela do computador e redimensionar.
 
 ---
 
@@ -40,7 +42,7 @@ Um simulador de Cubo Mágico 3D em **Rust** utilizando o motor de jogos **[Bevy]
 
 O projeto é estruturado em plugins modulares do Bevy ECS:
 
-* [`src/main.rs`](src/main.rs): Inicialização da janela (640x480 sem decorações), iluminação, câmera orbital esférica, atalhos de saída e renderização da HUD superior/inferior.
+* [`src/main.rs`](src/main.rs): Inicialização da janela com decorações/barra de título nativa e redimensionamento, câmera orbital e de pan, atalhos de saída e renderização da HUD superior/inferior.
 * [`src/cube.rs`](src/cube.rs):
   * Estrutura hierárquica dos 27 cubinhos (`Cubie`) e seus respectivos adesivos coloridos com materiais *unlit* (sem sombras).
   * Gerenciamento de rotações discretas por camadas lógicas inteiras (`IVec3`) para eliminar desvios de precisão numérica (*floating-point drift*).
