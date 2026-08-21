@@ -143,10 +143,14 @@ fn spawn_cube(
     let sticker_z = meshes.add(Cuboid::new(ADESIVO_TAMANHO, ADESIVO_TAMANHO, ADESIVO_ESPESSURA));
 
     fn mat(color: Color) -> StandardMaterial {
-        StandardMaterial { base_color: color, ..default() }
+        StandardMaterial {
+            base_color: color,
+            unlit: true,
+            ..default()
+        }
     }
 
-    let base_mat  = materials.add(mat(Color::rgb(0.15, 0.15, 0.15)));
+    let base_mat  = materials.add(mat(Color::rgb(0.1, 0.1, 0.1)));
     let mat_direita  = materials.add(mat(Color::rgb(0.9, 0.1, 0.1)));
     let mat_esquerda = materials.add(mat(Color::rgb(1.0, 0.5, 0.0)));
     let mat_cima     = materials.add(mat(Color::rgb(1.0, 1.0, 1.0)));

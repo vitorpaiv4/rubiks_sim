@@ -42,11 +42,10 @@ O projeto é estruturado em plugins modulares do Bevy ECS:
 
 * [`src/main.rs`](src/main.rs): Inicialização da janela (640x480 sem decorações), iluminação, câmera orbital esférica, atalhos de saída e renderização da HUD superior/inferior.
 * [`src/cube.rs`](src/cube.rs):
-  * Estrutura hierárquica dos 27 cubinhos (`Cubie`) e seus respectivos adesivos coloridos.
+  * Estrutura hierárquica dos 27 cubinhos (`Cubie`) e seus respectivos adesivos coloridos com materiais *unlit* (sem sombras).
   * Gerenciamento de rotações discretas por camadas lógicas inteiras (`IVec3`) para eliminar desvios de precisão numérica (*floating-point drift*).
   * Interpolação suave de rotação (`smoothstep`).
   * Fila de comandos de movimento (`MoveQueue`) e controle de estado do timer (`GameTimerState`).
-* [`src/retro.rs`](src/retro.rs): Geração procedural de textura de *scanlines* CRT sobreposta na tela com `Msaa::Off` para manter a estética clássica de jogos da era 32-bit.
 
 ---
 
