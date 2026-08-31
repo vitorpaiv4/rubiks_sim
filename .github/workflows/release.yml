@@ -173,7 +173,7 @@ jobs:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           unset ANDROID_SDK_ROOT || true
-          cargo apk build --release
+          cargo apk build --lib --release
 
       - name: Copy APK to root
         run: |
