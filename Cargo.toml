@@ -61,8 +61,9 @@ icon = "@mipmap/ic_launcher"
 
 [package.metadata.android.signing.release]
 path = "release.keystore"
-storepass = "rubiks123"
-keypass = "rubiks123"
+keystore_password = "rubiks_password"
+key_alias = "rubikssim"
+key_password = "rubiks_password"
 
 [package.metadata.android.activity]
 orientation = "unspecified"
