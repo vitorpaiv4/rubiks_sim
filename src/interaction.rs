@@ -10,16 +10,18 @@ pub struct CameraOrbit {
     pub yaw: f32,
     pub pitch: f32,
     pub auto_rotate: bool,
+    pub floating: bool,
     pub focus: Vec3,
 }
 
 impl Default for CameraOrbit {
     fn default() -> Self {
         Self {
-            radius: 9.434,
+            radius: 9.5,
             yaw: 0.0,
-            pitch: 0.5586,
+            pitch: 0.55,
             auto_rotate: false,
+            floating: false,
             focus: Vec3::ZERO,
         }
     }
@@ -107,6 +109,29 @@ fn intersect_ray_aabb(ray_origin: Vec3, ray_dir: Vec3, aabb_min: Vec3, aabb_max:
     Some((tmin, hit_normal))
 }
 
+fn raycast_cubies(
+    ray: Ray3d,
+    cubies: &Query<(&Cubie, &Transform), Without<CameraOrbit>>,
+) -> Option<(f32, Vec3, IVec3, Vec3)> {
+    let ray_origin = ray.origin;
+    let ray_dir = ray.direction.normalize();
+    let mut closest_hit: Option<(f32, Vec3, IVec3, Vec3)> = None;
+
+    for (cubie, transform) in cubies {
+        let half = Vec3::splat(CUBIE_SIZE * 0.52);
+        let min = transform.translation - half;
+        let max = transform.translation + half;
+
+        if let Some((t, normal)) = intersect_ray_aabb(ray_origin, ray_dir, min, max) {
+            if closest_hit.map_or(true, |(closest_t, _, _, _)| t < closest_t) {
+                let hit_world = ray_origin + ray_dir * t;
+                closest_hit = Some((t, normal, cubie.logical_pos, hit_world));
+            }
+        }
+    }
+    closest_hit
+}
+
 fn handle_cube_and_camera_interaction(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -129,48 +154,76 @@ fn handle_cube_and_camera_interaction(
         return;
     };
 
+    let scale = window.scale_factor().max(1.0);
+
+    // Atalho teclado opcional para PC
     if keys.just_pressed(KeyCode::Space) {
-        orbit.auto_rotate = !orbit.auto_rotate;
+        orbit.floating = !orbit.floating;
     }
 
-    // Identifica posição de cursor ativo (Mouse ou Touch)
-    let current_pointer_pos = if let Some(touch) = touches.iter().next() {
-        Some(touch.position())
-    } else {
-        window.cursor_position()
-    };
+    let touch_count = touches.iter().count();
 
-    let pointer_just_pressed = mouse_buttons.just_pressed(MouseButton::Left) || touches.any_just_pressed();
-    let pointer_pressed = mouse_buttons.pressed(MouseButton::Left) || touches.iter().next().is_some();
-    let pointer_just_released = mouse_buttons.just_released(MouseButton::Left) || touches.any_just_released();
+    // =========================================================================
+    // 1. GESTO DE 2 DEDOS (TOUCH MOBILE): ÓRBITA DA CÂMERA + PINCH TO ZOOM
+    // =========================================================================
+    if touch_count >= 2 {
+        // Cancela qualquer arraste de peça de 1 dedo ativo
+        interaction.drag = None;
+        interaction.is_orbiting = true;
+
+        let mut touches_iter = touches.iter();
+        let t1 = touches_iter.next().unwrap();
+        let t2 = touches_iter.next().unwrap();
+
+        // Rotação/Órbita com 2 dedos movendo juntos
+        let avg_delta = (t1.delta() + t2.delta()) * 0.5;
+        let delta_logical = avg_delta / scale;
+        orbit.yaw -= delta_logical.x * 0.008;
+        orbit.pitch = (orbit.pitch + delta_logical.y * 0.008).clamp(-1.45, 1.45);
+
+        // Zoom por pinça (Pinch-to-zoom)
+        let dist = (t1.position() - t2.position()).length();
+        let prev_dist = (t1.previous_position() - t2.previous_position()).length();
+        let pinch_delta = (dist - prev_dist) / scale;
+        orbit.radius = (orbit.radius - pinch_delta * 0.025).clamp(3.5, 22.0);
+    }
+
+    // =========================================================================
+    // 2. GESTO DE 1 DEDO / MOUSE: ARRASTAR PEÇA DO CUBO OU ÓRBITA NO FUNDO
+    // =========================================================================
+    let (current_pointer_pos, pointer_just_pressed, pointer_pressed, pointer_just_released) = if touch_count == 1 {
+        let touch = touches.iter().next().unwrap();
+        let pos_logical = touch.position() / scale;
+        (
+            Some(pos_logical),
+            touches.any_just_pressed(),
+            true,
+            touches.any_just_released(),
+        )
+    } else if touch_count == 0 {
+        (
+            window.cursor_position(),
+            mouse_buttons.just_pressed(MouseButton::Left),
+            mouse_buttons.pressed(MouseButton::Left),
+            mouse_buttons.just_released(MouseButton::Left),
+        )
+    } else {
+        (None, false, false, false)
+    };
 
     let right_pressed = mouse_buttons.pressed(MouseButton::Right);
     let middle_pressed = mouse_buttons.pressed(MouseButton::Middle);
 
-    // 1. INÍCIO DO CLIQUE / TOQUE
-    if pointer_just_pressed && !ui_hover.is_hovering_ui {
+    // INÍCIO DO TOQUE / CLIQUE (1 dedo ou botão esquerdo do mouse)
+    if pointer_just_pressed && !ui_hover.is_hovering_ui && touch_count <= 1 {
         if let Some(screen_pos) = current_pointer_pos {
-            if let Some(ray) = camera.viewport_to_world(camera_global, screen_pos) {
-                let ray_origin = ray.origin;
-                let ray_dir = ray.direction.normalize();
+            // Tenta obter raio de projeção 3D
+            let ray_opt = camera.viewport_to_world(camera_global, screen_pos)
+                .or_else(|| camera.viewport_to_world(camera_global, screen_pos * scale));
 
-                let mut closest_hit: Option<(f32, Vec3, IVec3, Vec3)> = None;
-
-                for (cubie, transform) in &cubies {
-                    let half = Vec3::splat(CUBIE_SIZE * 0.5);
-                    let min = transform.translation - half;
-                    let max = transform.translation + half;
-
-                    if let Some((t, normal)) = intersect_ray_aabb(ray_origin, ray_dir, min, max) {
-                        if closest_hit.map_or(true, |(closest_t, _, _, _)| t < closest_t) {
-                            let hit_world = ray_origin + ray_dir * t;
-                            closest_hit = Some((t, normal, cubie.logical_pos, hit_world));
-                        }
-                    }
-                }
-
-                if let Some((_, hit_normal, logical_pos, hit_world)) = closest_hit {
-                    // Clicou diretamente sobre uma peça do cubo
+            if let Some(ray) = ray_opt {
+                if let Some((_, hit_normal, logical_pos, hit_world)) = raycast_cubies(ray, &cubies) {
+                    // Tocou diretamente em uma peça do cubo
                     interaction.drag = Some(ActiveDrag {
                         start_screen_pos: screen_pos,
                         hit_world_pos: hit_world,
@@ -180,7 +233,7 @@ fn handle_cube_and_camera_interaction(
                     });
                     interaction.is_orbiting = false;
                 } else {
-                    // Clicou no espaço vazio / fundo -> inicia órbita de câmera
+                    // Tocou no fundo / vazio
                     interaction.drag = None;
                     interaction.is_orbiting = true;
                 }
@@ -188,13 +241,14 @@ fn handle_cube_and_camera_interaction(
         }
     }
 
-    // 2. PROCESSAMENTO DO ARRASTE NA PEÇA DO CUBO
+    // PROCESSAMENTO DO ARRASTE NA PEÇA DO CUBO
     if let Some(ref mut drag) = interaction.drag {
         if !drag.is_resolved && pointer_pressed && rotation_state.anim.is_none() {
             if let Some(screen_pos) = current_pointer_pos {
                 let delta = screen_pos - drag.start_screen_pos;
-                if delta.length() >= 14.0 {
-                    // Calcula as direções ortogonais na face clicada
+                let min_drag_dist = 16.0; // Distância confortável para touch e mouse
+
+                if delta.length() >= min_drag_dist {
                     let normal = drag.hit_normal;
                     let (tangent_a, tangent_b) = if normal.x.abs() > 0.8 {
                         (Vec3::Y, Vec3::Z)
@@ -215,10 +269,14 @@ fn handle_cube_and_camera_interaction(
                     let mut best_dir = tangent_a;
 
                     let p0 = drag.hit_world_pos;
-                    if let Some(s0) = camera.world_to_viewport(camera_global, p0) {
+                    let s0_opt = camera.world_to_viewport(camera_global, p0)
+                        .map(|s| s / scale);
+
+                    if let Some(s0) = s0_opt {
                         for d in candidate_directions {
                             let p_test = p0 + d * 0.5;
-                            if let Some(s_test) = camera.world_to_viewport(camera_global, p_test) {
+                            if let Some(s_test_raw) = camera.world_to_viewport(camera_global, p_test) {
+                                let s_test = s_test_raw / scale;
                                 let screen_dir = s_test - s0;
                                 if screen_dir.length_squared() > 0.001 {
                                     let norm_dir = screen_dir.normalize();
@@ -233,7 +291,7 @@ fn handle_cube_and_camera_interaction(
                     }
 
                     if best_score > 10.0 {
-                        // Calcula o eixo de rotação: Ω = N × D
+                        // Calcula eixo de rotação: Ω = N × D
                         let omega = normal.cross(best_dir);
                         let (axis, layer, sign) = if omega.x.abs() > 0.8 {
                             (Vec3::X, drag.logical_pos.x, omega.x.signum())
@@ -252,58 +310,57 @@ fn handle_cube_and_camera_interaction(
         }
     }
 
-    // 3. ÓRBITA E PAN DA CÂMERA (Mouse ou Touch no Fundo)
-    let should_orbit = (interaction.is_orbiting && pointer_pressed) || right_pressed;
-    let should_pan = middle_pressed;
-
-    if should_orbit || should_pan {
+    // ÓRBITA COM 1 DEDO NO FUNDO OU MOUSE
+    if interaction.is_orbiting && touch_count == 1 {
+        if let Some(touch) = touches.iter().next() {
+            let delta = touch.delta() / scale;
+            orbit.yaw -= delta.x * 0.007;
+            orbit.pitch = (orbit.pitch + delta.y * 0.007).clamp(-1.45, 1.45);
+        }
+    } else if (interaction.is_orbiting && pointer_pressed) || right_pressed {
         for motion in motion_events.read() {
-            if should_orbit {
-                orbit.yaw -= motion.delta.x * 0.006;
-                orbit.pitch = (orbit.pitch + motion.delta.y * 0.006).clamp(-1.45, 1.45);
-            } else if should_pan {
-                let forward = -Vec3::new(
-                    orbit.pitch.cos() * orbit.yaw.sin(),
-                    orbit.pitch.sin(),
-                    orbit.pitch.cos() * orbit.yaw.cos(),
-                ).normalize();
-                let right = forward.cross(Vec3::Y).normalize();
-                let up = right.cross(forward).normalize();
-                orbit.focus += (-right * motion.delta.x + up * motion.delta.y) * 0.008;
-            }
+            orbit.yaw -= (motion.delta.x / scale) * 0.006;
+            orbit.pitch = (orbit.pitch + (motion.delta.y / scale) * 0.006).clamp(-1.45, 1.45);
+        }
+    } else if middle_pressed {
+        for motion in motion_events.read() {
+            let forward = -Vec3::new(
+                orbit.pitch.cos() * orbit.yaw.sin(),
+                orbit.pitch.sin(),
+                orbit.pitch.cos() * orbit.yaw.cos(),
+            ).normalize();
+            let right = forward.cross(Vec3::Y).normalize();
+            let up = right.cross(forward).normalize();
+            orbit.focus += (-right * (motion.delta.x / scale) + up * (motion.delta.y / scale)) * 0.008;
         }
     } else {
         motion_events.clear();
     }
 
-    // 4. SUPORTE A PINCH-TO-ZOOM E 2 DEDOS (TOUCH)
-    if touches.iter().count() >= 2 {
-        let mut touches_iter = touches.iter();
-        let t1 = touches_iter.next().unwrap();
-        let t2 = touches_iter.next().unwrap();
-        let dist = (t1.position() - t2.position()).length();
-        let prev_dist = (t1.previous_position() - t2.previous_position()).length();
-        let pinch_delta = dist - prev_dist;
-        orbit.radius = (orbit.radius - pinch_delta * 0.02).clamp(3.5, 20.0);
-    }
-
-    // 5. ZOOM VIA SCROLL DO MOUSE
+    // ZOOM VIA SCROLL (Desktop)
     for scroll in scroll_events.read() {
-        orbit.radius = (orbit.radius - scroll.y * 0.6).clamp(3.5, 20.0);
+        orbit.radius = (orbit.radius - scroll.y * 0.6).clamp(3.5, 22.0);
     }
 
-    // 6. AUTO ROTAÇÃO DA CÂMERA
-    if orbit.auto_rotate {
+    // =========================================================================
+    // 3. MODO FLUTUAR / ZERO GRAVITY (AUTO-ROTAÇÃO SUAVE + ONDA SENOIDAL)
+    // =========================================================================
+    if orbit.floating || orbit.auto_rotate {
+        let elapsed = time.elapsed_seconds();
         orbit.yaw += 0.35 * time.delta_seconds();
+        orbit.focus.y = (elapsed * 1.6).sin() * 0.22;
+    } else {
+        // Retorna suavemente para o centro se desligado
+        orbit.focus.y = orbit.focus.y * 0.95;
     }
 
-    // 7. FINALIZAÇÃO DO CLIQUE / TOQUE
-    if pointer_just_released {
+    // FINALIZAÇÃO DO CLIQUE / TOQUE
+    if pointer_just_released || touch_count == 0 && !pointer_pressed {
         interaction.drag = None;
         interaction.is_orbiting = false;
     }
 
-    // Atualiza posição da câmera esférica
+    // ATUALIZAÇÃO DA POSIÇÃO DA CÂMERA ESFÉRICA
     let x = orbit.radius * orbit.pitch.cos() * orbit.yaw.sin();
     let y = orbit.radius * orbit.pitch.sin();
     let z = orbit.radius * orbit.pitch.cos() * orbit.yaw.cos();

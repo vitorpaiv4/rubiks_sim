@@ -19,7 +19,7 @@ impl Plugin for UiPlugin {
                     button_interaction_system,
                     update_hud_system,
                     toggle_controls_keyboard_system,
-                    sync_face_panel_visibility_system,
+                    sync_ui_visibility_system,
                 ),
             );
     }
@@ -34,6 +34,7 @@ pub struct UiHoverState {
 pub struct UiControlsState {
     pub show_face_buttons: bool,
     pub is_inverse: bool,
+    pub is_clean_screen: bool,
 }
 
 impl Default for UiControlsState {
@@ -41,6 +42,7 @@ impl Default for UiControlsState {
         Self {
             show_face_buttons: false,
             is_inverse: false,
+            is_clean_screen: false,
         }
     }
 }
@@ -50,7 +52,8 @@ pub enum UiButtonAction {
     Scramble,
     Reset,
     Undo,
-    ToggleAutoCam,
+    ToggleFloating,
+    ToggleCleanScreen,
     ToggleFaceControls,
     RotateFace(Face),
     ToggleInverse,
@@ -66,7 +69,16 @@ struct HudStatusText;
 struct HudScrambleText;
 
 #[derive(Component)]
+struct HeaderContainerNode;
+
+#[derive(Component)]
 struct FacePanelNode;
+
+#[derive(Component)]
+struct ZenRestoreButtonNode;
+
+#[derive(Component)]
+struct ToggleFloatingBtnText;
 
 #[derive(Component)]
 struct ToggleControlsBtnText;
@@ -74,45 +86,50 @@ struct ToggleControlsBtnText;
 #[derive(Component)]
 struct InverseBtnText;
 
-const BTN_BG: Color = Color::rgba(0.12, 0.15, 0.20, 0.85);
-const BTN_HOVER: Color = Color::rgba(0.20, 0.28, 0.38, 0.95);
-const BTN_PRESSED: Color = Color::rgba(0.18, 0.52, 0.82, 1.0);
+const BTN_BG: Color = Color::rgba(0.10, 0.14, 0.20, 0.88);
+const BTN_HOVER: Color = Color::rgba(0.18, 0.26, 0.38, 0.95);
+const BTN_PRESSED: Color = Color::rgba(0.18, 0.52, 0.85, 1.0);
 
-const FACE_BTN_BG: Color = Color::rgba(0.14, 0.17, 0.22, 0.9);
-const FACE_BTN_HOVER: Color = Color::rgba(0.24, 0.30, 0.40, 0.95);
+const FACE_BTN_BG: Color = Color::rgba(0.12, 0.16, 0.22, 0.92);
+const FACE_BTN_HOVER: Color = Color::rgba(0.24, 0.32, 0.44, 0.98);
 
 fn setup_ui(mut commands: Commands) {
-    // Root container transparente
+    // Root container transparente ocupando a tela toda
     commands.spawn(NodeBundle {
         style: Style {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
             flex_direction: FlexDirection::Column,
             justify_content: JustifyContent::SpaceBetween,
-            padding: UiRect::all(Val::Px(14.0)),
+            padding: UiRect::all(Val::Px(10.0)),
             ..default()
         },
         background_color: BackgroundColor(Color::NONE),
         ..default()
     }).with_children(|root| {
 
-        // ==================== HEADER SUPERIOR ====================
-        root.spawn(NodeBundle {
-            style: Style {
-                width: Val::Percent(100.0),
-                flex_direction: FlexDirection::Row,
-                justify_content: JustifyContent::SpaceBetween,
-                align_items: AlignItems::Center,
-                padding: UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
-                border: UiRect::all(Val::Px(1.0)),
+        // ==================== HEADER PRINCIPAL ====================
+        root.spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Row,
+                    justify_content: JustifyContent::SpaceBetween,
+                    align_items: AlignItems::Center,
+                    flex_wrap: FlexWrap::Wrap,
+                    row_gap: Val::Px(8.0),
+                    padding: UiRect::axes(Val::Px(14.0), Val::Px(10.0)),
+                    border: UiRect::all(Val::Px(1.0)),
+                    ..default()
+                },
+                background_color: BackgroundColor(Color::rgba(0.05, 0.07, 0.11, 0.82)),
+                border_color: BorderColor(Color::rgba(0.25, 0.35, 0.48, 0.45)),
                 ..default()
             },
-            background_color: BackgroundColor(Color::rgba(0.06, 0.08, 0.12, 0.80)),
-            border_color: BorderColor(Color::rgba(0.25, 0.32, 0.42, 0.45)),
-            ..default()
-        }).with_children(|header| {
+            HeaderContainerNode,
+        )).with_children(|header| {
 
-            // Bloco Esquerdo: Timer + Movimentos + Status + Scramble
+            // Bloco Esquerdo: Timer + Movimentos + Status
             header.spawn(NodeBundle {
                 style: Style {
                     flex_direction: FlexDirection::Column,
@@ -129,7 +146,7 @@ fn setup_ui(mut commands: Commands) {
                     style: Style {
                         flex_direction: FlexDirection::Row,
                         align_items: AlignItems::Baseline,
-                        column_gap: Val::Px(12.0),
+                        column_gap: Val::Px(10.0),
                         ..default()
                     },
                     background_color: BackgroundColor(Color::NONE),
@@ -139,7 +156,7 @@ fn setup_ui(mut commands: Commands) {
                         TextBundle::from_section(
                             "00:00.00",
                             TextStyle {
-                                font_size: 28.0,
+                                font_size: 26.0,
                                 color: Color::WHITE,
                                 ..default()
                             },
@@ -152,7 +169,7 @@ fn setup_ui(mut commands: Commands) {
                             "0 MOVS | PRONTO",
                             TextStyle {
                                 font_size: 13.0,
-                                color: Color::rgb(0.7, 0.75, 0.8),
+                                color: Color::rgb(0.7, 0.75, 0.82),
                                 ..default()
                             },
                         ),
@@ -160,12 +177,12 @@ fn setup_ui(mut commands: Commands) {
                     ));
                 });
 
-                // Linha de Scramble (aparece apenas quando embaralhado)
+                // Linha de Scramble (aparece quando embaralhado)
                 info_col.spawn((
                     TextBundle::from_section(
                         "",
                         TextStyle {
-                            font_size: 12.0,
+                            font_size: 11.5,
                             color: Color::rgba(0.65, 0.75, 0.88, 0.85),
                             ..default()
                         },
@@ -174,26 +191,61 @@ fn setup_ui(mut commands: Commands) {
                 ));
             });
 
-            // Bloco Direito: Botões de Ação
+            // Bloco Direito: Botões de Ação Touch-Friendly
             header.spawn(NodeBundle {
                 style: Style {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
+                    flex_wrap: FlexWrap::Wrap,
                     column_gap: Val::Px(6.0),
+                    row_gap: Val::Px(6.0),
                     ..default()
                 },
                 background_color: BackgroundColor(Color::NONE),
                 ..default()
             }).with_children(|btn_group| {
-                spawn_clean_btn(btn_group, "Scramble", UiButtonAction::Scramble);
-                spawn_clean_btn(btn_group, "Desfazer", UiButtonAction::Undo);
-                spawn_clean_btn(btn_group, "Reset", UiButtonAction::Reset);
-                spawn_clean_btn(btn_group, "Auto Cam", UiButtonAction::ToggleAutoCam);
+                spawn_responsive_btn(btn_group, "Embaralhar", UiButtonAction::Scramble);
+                spawn_responsive_btn(btn_group, "Desfazer", UiButtonAction::Undo);
+                spawn_responsive_btn(btn_group, "Reset", UiButtonAction::Reset);
+
+                // Botão de Flutuar / Flutuação no Espaço
+                btn_group.spawn((
+                    ButtonBundle {
+                        style: Style {
+                            min_height: Val::Px(38.0),
+                            padding: UiRect::axes(Val::Px(11.0), Val::Px(6.0)),
+                            border: UiRect::all(Val::Px(1.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        background_color: BackgroundColor(BTN_BG),
+                        border_color: BorderColor(Color::rgba(0.3, 0.4, 0.55, 0.4)),
+                        ..default()
+                    },
+                    UiButtonAction::ToggleFloating,
+                )).with_children(|btn| {
+                    btn.spawn((
+                        TextBundle::from_section(
+                            "Flutuar",
+                            TextStyle {
+                                font_size: 13.0,
+                                color: Color::rgb(0.9, 0.92, 0.95),
+                                ..default()
+                            },
+                        ),
+                        ToggleFloatingBtnText,
+                    ));
+                });
+
+                // Botão de Tela Limpa (Modo Zen)
+                spawn_responsive_btn(btn_group, "Tela Limpa", UiButtonAction::ToggleCleanScreen);
 
                 // Botão para Alternar a Exibição dos Botões de Face
                 btn_group.spawn((
                     ButtonBundle {
                         style: Style {
+                            min_height: Val::Px(38.0),
                             padding: UiRect::axes(Val::Px(11.0), Val::Px(6.0)),
                             border: UiRect::all(Val::Px(1.0)),
                             justify_content: JustifyContent::Center,
@@ -208,16 +260,58 @@ fn setup_ui(mut commands: Commands) {
                 )).with_children(|btn| {
                     btn.spawn((
                         TextBundle::from_section(
-                            "Botoes: Ocultos",
+                            "Botoes",
                             TextStyle {
-                                font_size: 12.5,
-                                color: Color::rgb(0.75, 0.8, 0.9),
+                                font_size: 13.0,
+                                color: Color::rgb(0.85, 0.88, 0.95),
                                 ..default()
                             },
                         ),
                         ToggleControlsBtnText,
                     ));
                 });
+            });
+        });
+
+        // ==================== BOTÃO DISCRETO PARA RESTAURAR HUD (MODO TELA LIMPA) ====================
+        root.spawn((
+            NodeBundle {
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(12.0),
+                    right: Val::Px(12.0),
+                    display: Display::None,
+                    ..default()
+                },
+                background_color: BackgroundColor(Color::NONE),
+                ..default()
+            },
+            ZenRestoreButtonNode,
+        )).with_children(|zen_wrap| {
+            zen_wrap.spawn((
+                ButtonBundle {
+                    style: Style {
+                        min_height: Val::Px(36.0),
+                        padding: UiRect::axes(Val::Px(14.0), Val::Px(6.0)),
+                        border: UiRect::all(Val::Px(1.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    background_color: BackgroundColor(Color::rgba(0.08, 0.12, 0.18, 0.70)),
+                    border_color: BorderColor(Color::rgba(0.3, 0.45, 0.65, 0.50)),
+                    ..default()
+                },
+                UiButtonAction::ToggleCleanScreen,
+            )).with_children(|btn| {
+                btn.spawn(TextBundle::from_section(
+                    "Mostrar Menu",
+                    TextStyle {
+                        font_size: 12.5,
+                        color: Color::rgba(0.85, 0.9, 1.0, 0.85),
+                        ..default()
+                    },
+                ));
             });
         });
 
@@ -229,7 +323,7 @@ fn setup_ui(mut commands: Commands) {
                     flex_direction: FlexDirection::Row,
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
-                    display: Display::None, // Oculto por padrão, ativado pelo botão "Botoes" ou tecla Tab
+                    display: Display::None,
                     ..default()
                 },
                 background_color: BackgroundColor(Color::NONE),
@@ -241,13 +335,15 @@ fn setup_ui(mut commands: Commands) {
                 style: Style {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
+                    flex_wrap: FlexWrap::Wrap,
                     column_gap: Val::Px(6.0),
-                    padding: UiRect::axes(Val::Px(10.0), Val::Px(6.0)),
+                    row_gap: Val::Px(6.0),
+                    padding: UiRect::axes(Val::Px(10.0), Val::Px(8.0)),
                     border: UiRect::all(Val::Px(1.0)),
                     ..default()
                 },
-                background_color: BackgroundColor(Color::rgba(0.06, 0.08, 0.12, 0.85)),
-                border_color: BorderColor(Color::rgba(0.25, 0.32, 0.42, 0.45)),
+                background_color: BackgroundColor(Color::rgba(0.05, 0.07, 0.11, 0.88)),
+                border_color: BorderColor(Color::rgba(0.25, 0.35, 0.48, 0.45)),
                 ..default()
             }).with_children(|face_row| {
                 spawn_face_btn(face_row, "U", Face::U, Color::rgb(0.95, 0.95, 0.95));
@@ -260,7 +356,8 @@ fn setup_ui(mut commands: Commands) {
                 face_row.spawn((
                     ButtonBundle {
                         style: Style {
-                            padding: UiRect::axes(Val::Px(10.0), Val::Px(6.0)),
+                            min_height: Val::Px(38.0),
+                            padding: UiRect::axes(Val::Px(12.0), Val::Px(6.0)),
                             margin: UiRect::left(Val::Px(6.0)),
                             border: UiRect::all(Val::Px(1.0)),
                             justify_content: JustifyContent::Center,
@@ -275,9 +372,9 @@ fn setup_ui(mut commands: Commands) {
                 )).with_children(|btn| {
                     btn.spawn((
                         TextBundle::from_section(
-                            "Inverso: OFF",
+                            "Inverter",
                             TextStyle {
-                                font_size: 12.0,
+                                font_size: 13.0,
                                 color: Color::rgb(0.85, 0.85, 0.9),
                                 ..default()
                             },
@@ -290,11 +387,12 @@ fn setup_ui(mut commands: Commands) {
     });
 }
 
-fn spawn_clean_btn(parent: &mut ChildBuilder, label: &str, action: UiButtonAction) {
+fn spawn_responsive_btn(parent: &mut ChildBuilder, label: &str, action: UiButtonAction) {
     parent.spawn((
         ButtonBundle {
             style: Style {
-                padding: UiRect::axes(Val::Px(11.0), Val::Px(6.0)),
+                min_height: Val::Px(38.0),
+                padding: UiRect::axes(Val::Px(12.0), Val::Px(6.0)),
                 border: UiRect::all(Val::Px(1.0)),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
@@ -309,7 +407,7 @@ fn spawn_clean_btn(parent: &mut ChildBuilder, label: &str, action: UiButtonActio
         btn.spawn(TextBundle::from_section(
             label,
             TextStyle {
-                font_size: 12.5,
+                font_size: 13.0,
                 color: Color::rgb(0.9, 0.92, 0.95),
                 ..default()
             },
@@ -321,8 +419,8 @@ fn spawn_face_btn(parent: &mut ChildBuilder, label: &str, face: Face, color: Col
     parent.spawn((
         ButtonBundle {
             style: Style {
-                width: Val::Px(36.0),
-                height: Val::Px(32.0),
+                width: Val::Px(42.0),
+                height: Val::Px(38.0),
                 border: UiRect::all(Val::Px(1.0)),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
@@ -337,7 +435,7 @@ fn spawn_face_btn(parent: &mut ChildBuilder, label: &str, face: Face, color: Col
         btn.spawn(TextBundle::from_section(
             label,
             TextStyle {
-                font_size: 14.0,
+                font_size: 15.0,
                 color,
                 ..default()
             },
@@ -360,7 +458,8 @@ fn button_interaction_system(
     mut scramble_info: ResMut<ScrambleInfo>,
     mut cubies: Query<(Entity, &mut Transform, &mut Cubie)>,
     mut orbit_query: Query<&mut CameraOrbit>,
-    mut inverse_text_query: Query<&mut Text, (With<InverseBtnText>, Without<ToggleControlsBtnText>)>,
+    mut floating_text_query: Query<&mut Text, (With<ToggleFloatingBtnText>, Without<InverseBtnText>)>,
+    mut inverse_text_query: Query<&mut Text, (With<InverseBtnText>, Without<ToggleFloatingBtnText>)>,
 ) {
     ui_hover.is_hovering_ui = all_buttons.iter().any(|i| *i == Interaction::Hovered || *i == Interaction::Pressed);
 
@@ -378,10 +477,25 @@ fn button_interaction_system(
                     UiButtonAction::Undo => {
                         trigger_undo(&mut queue, &mut history, &state);
                     }
-                    UiButtonAction::ToggleAutoCam => {
+                    UiButtonAction::ToggleFloating => {
                         if let Ok(mut orbit) = orbit_query.get_single_mut() {
-                            orbit.auto_rotate = !orbit.auto_rotate;
+                            orbit.floating = !orbit.floating;
+                            for mut text in &mut floating_text_query {
+                                text.sections[0].value = if orbit.floating {
+                                    "Flutuando".to_string()
+                                } else {
+                                    "Flutuar".to_string()
+                                };
+                                text.sections[0].style.color = if orbit.floating {
+                                    Color::rgb(0.3, 0.9, 1.0)
+                                } else {
+                                    Color::rgb(0.9, 0.92, 0.95)
+                                };
+                            }
                         }
+                    }
+                    UiButtonAction::ToggleCleanScreen => {
+                        ui_controls.is_clean_screen = !ui_controls.is_clean_screen;
                     }
                     UiButtonAction::ToggleFaceControls => {
                         ui_controls.show_face_buttons = !ui_controls.show_face_buttons;
@@ -393,9 +507,9 @@ fn button_interaction_system(
                         ui_controls.is_inverse = !ui_controls.is_inverse;
                         for mut text in &mut inverse_text_query {
                             text.sections[0].value = if ui_controls.is_inverse {
-                                "Inverso: ON".to_string()
+                                "Invertido".to_string()
                             } else {
-                                "Inverso: OFF".to_string()
+                                "Inverter".to_string()
                             };
                             text.sections[0].style.color = if ui_controls.is_inverse {
                                 Color::rgb(1.0, 0.45, 0.45)
@@ -429,16 +543,37 @@ fn toggle_controls_keyboard_system(
     if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::KeyH) {
         ui_controls.show_face_buttons = !ui_controls.show_face_buttons;
     }
+    if keys.just_pressed(KeyCode::KeyZ) {
+        ui_controls.is_clean_screen = !ui_controls.is_clean_screen;
+    }
 }
 
-fn sync_face_panel_visibility_system(
+fn sync_ui_visibility_system(
     ui_controls: Res<UiControlsState>,
-    mut panel_query: Query<&mut Style, With<FacePanelNode>>,
+    mut header_query: Query<&mut Style, (With<HeaderContainerNode>, Without<FacePanelNode>, Without<ZenRestoreButtonNode>)>,
+    mut panel_query: Query<&mut Style, (With<FacePanelNode>, Without<HeaderContainerNode>, Without<ZenRestoreButtonNode>)>,
+    mut restore_btn_query: Query<&mut Style, (With<ZenRestoreButtonNode>, Without<HeaderContainerNode>, Without<FacePanelNode>)>,
     mut toggle_btn_query: Query<&mut Text, With<ToggleControlsBtnText>>,
 ) {
     if ui_controls.is_changed() {
+        for mut style in &mut header_query {
+            style.display = if ui_controls.is_clean_screen {
+                Display::None
+            } else {
+                Display::Flex
+            };
+        }
+
         for mut style in &mut panel_query {
-            style.display = if ui_controls.show_face_buttons {
+            style.display = if !ui_controls.is_clean_screen && ui_controls.show_face_buttons {
+                Display::Flex
+            } else {
+                Display::None
+            };
+        }
+
+        for mut style in &mut restore_btn_query {
+            style.display = if ui_controls.is_clean_screen {
                 Display::Flex
             } else {
                 Display::None
@@ -447,9 +582,9 @@ fn sync_face_panel_visibility_system(
 
         for mut text in &mut toggle_btn_query {
             text.sections[0].value = if ui_controls.show_face_buttons {
-                "Botoes: Visiveis".to_string()
+                "Botoes (ON)".to_string()
             } else {
-                "Botoes: Ocultos".to_string()
+                "Botoes".to_string()
             };
         }
     }
@@ -459,9 +594,9 @@ fn update_hud_system(
     timer_state: Res<GameTimerState>,
     queue: Res<MoveQueue>,
     scramble_info: Res<ScrambleInfo>,
-    mut timer_query: Query<&mut Text, (With<HudTimerText>, Without<HudStatusText>, Without<HudScrambleText>, Without<ToggleControlsBtnText>, Without<InverseBtnText>)>,
-    mut status_query: Query<&mut Text, (With<HudStatusText>, Without<HudTimerText>, Without<HudScrambleText>, Without<ToggleControlsBtnText>, Without<InverseBtnText>)>,
-    mut scramble_query: Query<&mut Text, (With<HudScrambleText>, Without<HudTimerText>, Without<HudStatusText>, Without<ToggleControlsBtnText>, Without<InverseBtnText>)>,
+    mut timer_query: Query<&mut Text, (With<HudTimerText>, Without<HudStatusText>, Without<HudScrambleText>, Without<ToggleControlsBtnText>, Without<InverseBtnText>, Without<ToggleFloatingBtnText>)>,
+    mut status_query: Query<&mut Text, (With<HudStatusText>, Without<HudTimerText>, Without<HudScrambleText>, Without<ToggleControlsBtnText>, Without<InverseBtnText>, Without<ToggleFloatingBtnText>)>,
+    mut scramble_query: Query<&mut Text, (With<HudScrambleText>, Without<HudTimerText>, Without<HudStatusText>, Without<ToggleControlsBtnText>, Without<InverseBtnText>, Without<ToggleFloatingBtnText>)>,
 ) {
     let total_secs = timer_state.elapsed;
     let mins = (total_secs / 60.0).floor() as u32;
