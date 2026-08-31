@@ -46,8 +46,8 @@ bevy = { version = "0.13", default-features = false, features = [
 [package.metadata.android]
 package = "com.vitorpaiva.rubikssim"
 apk_name = "rubiks_sim"
-label = "Rubik's Cube 3D"
-version_code = 1
+assets = "assets"
+res = "res"
 min_sdk_version = 24
 target_sdk_version = 34
 opengles_version = "0x00030000"

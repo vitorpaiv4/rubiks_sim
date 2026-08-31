@@ -158,6 +158,7 @@ jobs:
       - name: Build Android APK
         env:
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           cargo apk build --release
 
