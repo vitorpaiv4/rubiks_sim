@@ -59,5 +59,10 @@ target_sdk_version = 34
 label = "Rubik's Cube 3D"
 icon = "@mipmap/ic_launcher"
 
+[package.metadata.android.signing.release]
+path = "release.keystore"
+storepass = "rubiks123"
+keypass = "rubiks123"
+
 [package.metadata.android.activity]
 orientation = "unspecified"
