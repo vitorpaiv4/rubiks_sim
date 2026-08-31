@@ -61,9 +61,12 @@ jobs:
           # 2. Build AppImage (Portable 1-click executable)
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
           cp target/${{ matrix.target }}/release/rubiks_sim AppDir/usr/bin/
           cp icon.png AppDir/rubiks_sim.png
+          cp icon.png AppDir/.DirIcon
           cp icon.png AppDir/usr/share/icons/hicolor/256x256/apps/rubiks_sim.png
+          cp icon.png AppDir/usr/share/icons/hicolor/512x512/apps/rubiks_sim.png
           cp rubiks_sim.desktop AppDir/
 
           cat << 'EOF' > AppDir/AppRun
@@ -124,3 +127,55 @@ jobs:
             *.exe
             *.tar.gz
             *.zip
+
+  build-android:
+    name: Build Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26b
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi
+
+      - name: Install cargo-apk
+        run: cargo install cargo-apk
+
+      - name: Build Android APK
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          cargo apk build --release
+
+      - name: Copy APK to root
+        run: |
+          find target/ -name "*.apk" -exec cp {} ./rubiks_sim-android.apk \;
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: rubiks_sim-android.apk
+          draft: false
+          prerelease: false
+
+      - name: Upload APK for manual workflow run
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: rubiks_sim-android
+          path: rubiks_sim-android.apk
